@@ -8,6 +8,7 @@ using FraudEngine.Core.Models;
 using FraudEngine.Core.Rules;
 using FraudEngine.Tests.TestDoubles;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -18,7 +19,7 @@ namespace FraudEngine.Tests.Controllers
         private static TransactionsController CreateController(
             InMemoryRepository repo, IEnumerable<IFraudRule>? rules = null)
         {
-            var engine = new RulesEngine(rules ?? Array.Empty<IFraudRule>());
+            var engine = new RulesEngine(rules ?? Array.Empty<IFraudRule>(), NullLogger<RulesEngine>.Instance);
             return new TransactionsController(repo, engine);
         }
 

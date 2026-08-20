@@ -23,10 +23,10 @@ namespace FraudEngine.Tests.TestDoubles
             return Task.CompletedTask;
         }
 
-        public Task<TransactionEvent> GetTransactionAsync(Guid id)
+        public Task<TransactionEvent?> GetTransactionAsync(Guid id)
         {
             var tx = _transactions.FirstOrDefault(t => t.Id == id);
-            return Task.FromResult(tx!);
+            return Task.FromResult(tx);
         }
 
         public Task<IEnumerable<TransactionEvent>> GetRecentTransactionsByAccountAsync(string accountId, TimeSpan lookback)

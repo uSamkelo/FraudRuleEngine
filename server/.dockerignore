@@ -6,6 +6,7 @@
 **/.idea
 **/bin
 **/obj
+**/logs
 **/*.user
 **/docker-compose*.yml
 **/Dockerfile*

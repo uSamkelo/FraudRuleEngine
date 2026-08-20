@@ -23,13 +23,9 @@ namespace FraudEngine.Core.Repositories
             await _db.SaveChangesAsync();
         }
 
-        public async Task<TransactionEvent> GetTransactionAsync(Guid id)
+        public async Task<TransactionEvent?> GetTransactionAsync(Guid id)
         {
-            // FindAsync returns null when no matching row exists; callers are expected
-            // to check for null (see TransactionsController), so the null-forgiving
-            // operator here just keeps the interface signature non-nullable rather
-            // than silently masking a bug.
-            return (await _db.Transactions.FindAsync(id))!;
+            return await _db.Transactions.FindAsync(id);
         }
 
         public async Task<IEnumerable<TransactionEvent>> GetRecentTransactionsByAccountAsync(string accountId, TimeSpan lookback)
@@ -61,7 +57,9 @@ namespace FraudEngine.Core.Repositories
 
         public async Task<Account> GetAccountAsync(string accountId)
         {
-            // See GetTransactionAsync for why the null-forgiving operator is used here.
+            // FindAsync returns null when no matching row exists; callers are expected
+            // to check for null, so the null-forgiving operator here just keeps the
+            // interface signature non-nullable rather than silently masking a bug.
             return (await _db.Accounts.FindAsync(accountId))!;
         }
 

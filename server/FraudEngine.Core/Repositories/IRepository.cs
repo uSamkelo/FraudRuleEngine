@@ -12,7 +12,7 @@ namespace FraudEngine.Core.Repositories
         Task AddAlertAsync(FraudAlert alert);
         Task<IEnumerable<FraudAlert>> GetAlertsAsync();
         Task<IEnumerable<FraudAlert>> GetAlertsAsync(AlertStatus? status);
-        Task<TransactionEvent> GetTransactionAsync(Guid id);
+        Task<TransactionEvent?> GetTransactionAsync(Guid id);
         Task<Account> GetAccountAsync(string accountId);
         Task AddAccountAsync(Account account);
         Task<IEnumerable<TransactionEvent>> GetTransactionsByAccountAsync(string accountId, int page, int pageSize);
