@@ -72,11 +72,12 @@ Database Migrations
     dotnet ef migrations script --project FraudEngine.Core --startup-project FraudEngine.Api -o migrate.sql
 
 Seed Data
-- On startup, in the `Development` environment only, [`DbSeeder`](FraudEngine.Core/Data/DbSeeder.cs) inserts ~12 representative
-  transactions (across several accounts) and runs each one through the real `RulesEngine` - the same
-  code path the API uses for `POST /api/transactions` - so the alerts it produces are genuine, not
-  hand-crafted. This is a no-op if the `Transactions` table already has data, so it never runs twice
-  or clobbers real data.
+- On startup, in the `Development` environment only, [`DbSeeder`](FraudEngine.Core/Data/DbSeeder.cs) inserts 27 accounts
+  (20 generic accounts plus 7 dedicated scenario accounts, one per fraud rule) and 200+ transactions -
+  the bulk of them ordinary/non-fraud, plus one guaranteed-to-fire scenario per registered fraud rule -
+  and runs each one through the real `RulesEngine` - the same code path the API uses for
+  `POST /api/transactions` - so the alerts it produces are genuine, not hand-crafted. This is a no-op if
+  the `Transactions` or `Accounts` table already has data, so it never runs twice or clobbers real data.
 - `docker-compose.yml` sets `ASPNETCORE_ENVIRONMENT=Development` for the `api` service specifically so
   a reviewer running `docker compose up --build` gets Swagger UI and this seed data out of the box.
 - Seeding is intentionally **not** wired up for `Production` - an environment without `ASPNETCORE_ENVIRONMENT=Development`
