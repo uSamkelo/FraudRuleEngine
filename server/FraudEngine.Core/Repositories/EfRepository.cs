@@ -47,9 +47,16 @@ namespace FraudEngine.Core.Repositories
             await _db.SaveChangesAsync();
         }
 
-        public async Task<IEnumerable<FraudAlert>> GetAlertsAsync()
+        public Task<IEnumerable<FraudAlert>> GetAlertsAsync() => GetAlertsAsync(status: null);
+
+        public async Task<IEnumerable<FraudAlert>> GetAlertsAsync(AlertStatus? status)
         {
-            return await _db.Alerts.OrderByDescending(a => a.CreatedAt).ToListAsync();
+            var query = _db.Alerts.AsQueryable();
+
+            if (status.HasValue)
+                query = query.Where(a => a.Status == status.Value);
+
+            return await query.OrderByDescending(a => a.CreatedAt).ToListAsync();
         }
 
         public async Task<Account> GetAccountAsync(string accountId)
@@ -83,6 +90,50 @@ namespace FraudEngine.Core.Repositories
                 .Select(t => t.CountryCode)
                 .Distinct()
                 .ToListAsync();
+        }
+
+        public async Task<(IEnumerable<TransactionEvent> Items, int TotalCount)> GetTransactionsAsync(
+            string? accountId, TransactionCategory? category, DateTimeOffset? from, DateTimeOffset? to,
+            int page, int pageSize)
+        {
+            var query = _db.Transactions.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(accountId))
+                query = query.Where(t => t.AccountId == accountId);
+
+            if (category.HasValue)
+                query = query.Where(t => t.Category == category.Value);
+
+            if (from.HasValue)
+                query = query.Where(t => t.Timestamp >= from.Value);
+
+            if (to.HasValue)
+                query = query.Where(t => t.Timestamp <= to.Value);
+
+            var totalCount = await query.CountAsync();
+
+            // 1-based page numbering; page <= 0 is treated as the first page.
+            var skip = Math.Max(page - 1, 0) * pageSize;
+            var items = await query
+                .OrderByDescending(t => t.Timestamp)
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
+        public async Task UpdateAlertStatusAsync(Guid alertId, AlertStatus status, string? reviewedBy)
+        {
+            var alert = await _db.Alerts.FindAsync(alertId);
+            if (alert == null)
+                throw new KeyNotFoundException($"Alert '{alertId}' was not found.");
+
+            alert.Status = status;
+            alert.ReviewedAt = DateTimeOffset.UtcNow;
+            alert.ReviewedBy = reviewedBy;
+
+            await _db.SaveChangesAsync();
         }
     }
 }

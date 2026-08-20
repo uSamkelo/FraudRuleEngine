@@ -1,4 +1,8 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
+using FraudEngine.Api.Middleware;
+using FraudEngine.Api.Validators;
 using FraudEngine.Core.Data;
 using FraudEngine.Core.Repositories;
 using FraudEngine.Core.Rules;
@@ -20,6 +24,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// FluentValidation - validators run automatically as part of MVC model binding
+// (in addition to any DataAnnotations on the request DTOs), producing a standard
+// ValidationProblemDetails (400) response for invalid input.
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<TransactionRequestValidator>();
 
 // EF Core with Npgsql. EnableRetryOnFailure adds resilience against transient
 // connectivity issues (e.g. the database container still starting up, brief
@@ -85,6 +95,10 @@ if (app.Environment.IsDevelopment())
 // Lightweight liveness endpoint - useful for container/orchestrator health checks
 // in any environment (unlike Swagger, this is always available).
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+// Registered before UseRouting so it wraps the entire pipeline downstream,
+// converting any unhandled exception into a standard problem+json response.
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseRouting();
 app.UseAuthorization();

@@ -46,9 +46,16 @@ namespace FraudEngine.Tests.TestDoubles
             return Task.CompletedTask;
         }
 
-        public Task<IEnumerable<FraudAlert>> GetAlertsAsync()
+        public Task<IEnumerable<FraudAlert>> GetAlertsAsync() => GetAlertsAsync(status: null);
+
+        public Task<IEnumerable<FraudAlert>> GetAlertsAsync(AlertStatus? status)
         {
-            return Task.FromResult(_alerts.OrderByDescending(a => a.CreatedAt).AsEnumerable());
+            var result = _alerts
+                .Where(a => !status.HasValue || a.Status == status.Value)
+                .OrderByDescending(a => a.CreatedAt)
+                .AsEnumerable();
+
+            return Task.FromResult(result);
         }
 
         public Task<Account> GetAccountAsync(string accountId)
@@ -85,6 +92,43 @@ namespace FraudEngine.Tests.TestDoubles
                 .AsEnumerable();
 
             return Task.FromResult(result);
+        }
+
+        public Task<(IEnumerable<TransactionEvent> Items, int TotalCount)> GetTransactionsAsync(
+            string? accountId, TransactionCategory? category, DateTimeOffset? from, DateTimeOffset? to,
+            int page, int pageSize)
+        {
+            var filtered = _transactions
+                .Where(t => string.IsNullOrWhiteSpace(accountId) || t.AccountId == accountId)
+                .Where(t => !category.HasValue || t.Category == category.Value)
+                .Where(t => !from.HasValue || t.Timestamp >= from.Value)
+                .Where(t => !to.HasValue || t.Timestamp <= to.Value)
+                .ToList();
+
+            var totalCount = filtered.Count;
+
+            // 1-based page numbering; page <= 0 is treated as the first page.
+            var skip = Math.Max(page - 1, 0) * pageSize;
+            var items = filtered
+                .OrderByDescending(t => t.Timestamp)
+                .Skip(skip)
+                .Take(pageSize)
+                .AsEnumerable();
+
+            return Task.FromResult<(IEnumerable<TransactionEvent> Items, int TotalCount)>((items, totalCount));
+        }
+
+        public Task UpdateAlertStatusAsync(Guid alertId, AlertStatus status, string? reviewedBy)
+        {
+            var alert = _alerts.FirstOrDefault(a => a.Id == alertId);
+            if (alert == null)
+                throw new KeyNotFoundException($"Alert '{alertId}' was not found.");
+
+            alert.Status = status;
+            alert.ReviewedAt = DateTimeOffset.UtcNow;
+            alert.ReviewedBy = reviewedBy;
+
+            return Task.CompletedTask;
         }
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
+using FraudEngine.Api.Dtos;
 using FraudEngine.Core.Models;
 using FraudEngine.Core.Repositories;
 using FraudEngine.Core.Rules;
@@ -24,19 +25,31 @@ namespace FraudEngine.Api.Controllers
 
         // POST api/transactions
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] TransactionEvent input)
+        public async Task<IActionResult> Post([FromBody] TransactionRequest request)
         {
-            if (input == null)
-                return BadRequest("Invalid payload");
+            var transaction = new TransactionEvent
+            {
+                Id = Guid.NewGuid(),
+                Timestamp = DateTimeOffset.UtcNow,
+                AccountId = request.AccountId,
+                Amount = request.Amount,
+                Category = request.Category,
+                Currency = request.Currency,
+                Channel = request.Channel,
+                CountryCode = request.CountryCode,
+                MerchantId = request.MerchantId,
+                MerchantName = request.MerchantName,
+                MerchantCategoryCode = request.MerchantCategoryCode,
+                DeviceId = request.DeviceId,
+                IpAddress = request.IpAddress,
+                CardLast4 = request.CardLast4,
+                Metadata = request.Metadata
+            };
 
-            // Ensure an Id and timestamp
-            if (input.Id == Guid.Empty) input.Id = Guid.NewGuid();
-            if (input.Timestamp == default) input.Timestamp = DateTimeOffset.UtcNow;
-
-            await _repo.AddTransactionAsync(input);
+            await _repo.AddTransactionAsync(transaction);
 
             // Evaluate rules
-            var alerts = await _engine.EvaluateAsync(input);
+            var alerts = await _engine.EvaluateAsync(transaction);
             var saved = new List<FraudAlert>();
             foreach (var a in alerts)
             {
@@ -44,7 +57,13 @@ namespace FraudEngine.Api.Controllers
                 saved.Add(a);
             }
 
-            return CreatedAtAction(nameof(GetById), new { id = input.Id }, new { transaction = input, alerts = saved });
+            var body = new
+            {
+                transaction = transaction.ToResponse(),
+                alerts = saved.Select(a => a.ToResponse())
+            };
+
+            return CreatedAtAction(nameof(GetById), new { id = transaction.Id }, body);
         }
 
         // GET api/transactions/{id}
@@ -53,23 +72,38 @@ namespace FraudEngine.Api.Controllers
         {
             var tx = await _repo.GetTransactionAsync(id);
             if (tx == null) return NotFound();
-            return Ok(tx);
+            return Ok(tx.ToResponse());
         }
 
-        // GET api/transactions
+        // GET api/transactions?accountId=&category=&from=&to=&page=1&pageSize=20
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string? accountId,
+            [FromQuery] TransactionCategory? category,
+            [FromQuery] DateTimeOffset? from,
+            [FromQuery] DateTimeOffset? to,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
         {
-            // Not implemented listing all transactions for brevity
-            return BadRequest("Listing all transactions is not supported in this demo");
+            var (items, totalCount) = await _repo.GetTransactionsAsync(accountId, category, from, to, page, pageSize);
+
+            var result = new PagedResult<TransactionResponse>
+            {
+                Items = items.Select(t => t.ToResponse()),
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
+
+            return Ok(result);
         }
 
-        // GET api/transactions/alerts
+        // GET api/transactions/alerts?status=Open
         [HttpGet("alerts")]
-        public async Task<IActionResult> GetAlerts()
+        public async Task<IActionResult> GetAlerts([FromQuery] AlertStatus? status)
         {
-            var alerts = await _repo.GetAlertsAsync();
-            return Ok(alerts);
+            var alerts = await _repo.GetAlertsAsync(status);
+            return Ok(alerts.Select(a => a.ToResponse()));
         }
     }
 }

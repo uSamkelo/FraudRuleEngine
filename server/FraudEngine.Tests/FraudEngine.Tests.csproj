@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FraudEngine.Core\FraudEngine.Core.csproj" />
+    <ProjectReference Include="..\FraudEngine.Api\FraudEngine.Api.csproj" />
   </ItemGroup>
 
 </Project>
