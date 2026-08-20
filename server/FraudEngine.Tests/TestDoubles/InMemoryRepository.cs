@@ -15,6 +15,7 @@ namespace FraudEngine.Tests.TestDoubles
     {
         private readonly List<TransactionEvent> _transactions = new();
         private readonly List<FraudAlert> _alerts = new();
+        private readonly List<Account> _accounts = new();
 
         public Task AddTransactionAsync(TransactionEvent tx)
         {
@@ -48,6 +49,42 @@ namespace FraudEngine.Tests.TestDoubles
         public Task<IEnumerable<FraudAlert>> GetAlertsAsync()
         {
             return Task.FromResult(_alerts.OrderByDescending(a => a.CreatedAt).AsEnumerable());
+        }
+
+        public Task<Account> GetAccountAsync(string accountId)
+        {
+            var account = _accounts.FirstOrDefault(a => a.AccountId == accountId);
+            return Task.FromResult(account!);
+        }
+
+        public Task AddAccountAsync(Account account)
+        {
+            _accounts.Add(account);
+            return Task.CompletedTask;
+        }
+
+        public Task<IEnumerable<TransactionEvent>> GetTransactionsByAccountAsync(string accountId, int page, int pageSize)
+        {
+            var skip = Math.Max(page - 1, 0) * pageSize;
+            var result = _transactions
+                .Where(t => t.AccountId == accountId)
+                .OrderByDescending(t => t.Timestamp)
+                .Skip(skip)
+                .Take(pageSize)
+                .AsEnumerable();
+
+            return Task.FromResult(result);
+        }
+
+        public Task<IEnumerable<string>> GetDistinctCountriesByAccountAsync(string accountId)
+        {
+            var result = _transactions
+                .Where(t => t.AccountId == accountId)
+                .Select(t => t.CountryCode)
+                .Distinct()
+                .AsEnumerable();
+
+            return Task.FromResult(result);
         }
     }
 }
