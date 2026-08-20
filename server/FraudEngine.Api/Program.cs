@@ -1,6 +1,6 @@
+using System.Text.Json;
 using FluentValidation;
 using FluentValidation.AspNetCore;
-using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -127,12 +127,37 @@ if (app.Environment.IsDevelopment())
 }
 
 // Production-grade liveness/readiness endpoint - reports overall status plus
-// per-check detail (currently just Postgres connectivity) as JSON, in the shape
-// expected by AspNetCore.HealthChecks.UI-compatible dashboards. Always available
-// (unlike Swagger), in any environment.
+// per-check detail (currently just Postgres connectivity) as JSON. Always
+// available (unlike Swagger), in any environment.
+//
+// Deliberately NOT using HealthChecks.UI.Client's UIResponseWriter here: by
+// default it includes each failed check's Description and exception message,
+// which for the "postgres" check can leak raw connection-string/error detail
+// (hostnames, "password authentication failed for user ...", etc.) to any
+// unauthenticated caller. That would undercut GlobalExceptionMiddleware's
+// deliberate choice to hide exception details outside Development. This
+// writer only ever emits name/status/duration per check, plus the top-level
+// status/totalDuration.
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration.ToString()
+            }),
+            totalDuration = report.TotalDuration.ToString()
+        };
+
+        await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+    }
 });
 
 // Registered before UseRouting so it wraps the entire pipeline downstream,
