@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using FraudEngine.Api.Middleware;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -23,6 +24,23 @@ namespace FraudEngine.Tests.Middleware
         public string ApplicationName { get; set; } = "FraudEngine.Tests";
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    /// <summary>
+    /// <see cref="DefaultHttpContext"/>'s built-in <see cref="IHttpResponseFeature"/>
+    /// always reports <c>HasStarted == false</c> (there's no real transport backing
+    /// it), so it can't be used to simulate "the response already started sending".
+    /// This stand-in lets tests force that state deliberately.
+    /// </summary>
+    file class StartedHttpResponseFeature : IHttpResponseFeature
+    {
+        public int StatusCode { get; set; } = StatusCodes.Status200OK;
+        public string? ReasonPhrase { get; set; }
+        public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
+        public Stream Body { get; set; } = Stream.Null;
+        public bool HasStarted => true;
+        public void OnStarting(Func<object, Task> callback, object state) { }
+        public void OnCompleted(Func<object, Task> callback, object state) { }
     }
 
     public class GlobalExceptionMiddlewareTests
@@ -83,6 +101,32 @@ namespace FraudEngine.Tests.Middleware
             var (_, body) = await InvokeAsync(next, new FakeHostEnvironment { EnvironmentName = Environments.Development });
 
             Assert.Equal("helpful debug detail", body.Detail);
+        }
+
+        [Fact]
+        public async Task InvokeAsync_ExceptionAfterResponseStarted_DoesNotThrowOrModifyStatusCode()
+        {
+            // Simulates an exception thrown mid-stream, after the response has
+            // already started sending (e.g. partway through a large PagedResult).
+            // At that point headers/status are locked in, so HandleExceptionAsync
+            // must not attempt to touch them - doing so would throw a second
+            // InvalidOperationException that masks the original exception.
+            RequestDelegate next = _ => throw new InvalidOperationException("boom mid-stream");
+
+            var context = new DefaultHttpContext();
+            context.Features.Set<IHttpResponseFeature>(new StartedHttpResponseFeature());
+
+            var middleware = new GlobalExceptionMiddleware(next, NullLogger<GlobalExceptionMiddleware>.Instance, new FakeHostEnvironment());
+
+            // The key assertion is implicit: this must not throw. Without the
+            // HasStarted guard, HandleExceptionAsync would try to set StatusCode on
+            // a response that (per our fake feature) has already started, which in
+            // a real server throws InvalidOperationException and masks the original
+            // "boom mid-stream" exception.
+            await middleware.InvokeAsync(context);
+
+            Assert.True(context.Response.HasStarted);
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         }
 
         [Fact]

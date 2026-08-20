@@ -48,6 +48,15 @@ namespace FraudEngine.Api.Middleware
             _logger.LogError(exception, "Unhandled exception processing {Method} {Path} -> {StatusCode}",
                 context.Request.Method, context.Request.Path, statusCode);
 
+            // If the response has already started (e.g. the exception was thrown
+            // mid-stream while writing a large body), headers/status can no longer be
+            // modified - attempting to would throw a second InvalidOperationException
+            // that masks the original exception. Just log and give up gracefully.
+            if (context.Response.HasStarted)
+            {
+                return;
+            }
+
             var problemDetails = new ProblemDetails
             {
                 Status = statusCode,
