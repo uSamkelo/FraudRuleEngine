@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using FraudEngine.Core.Models;
 using FraudEngine.Core.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace FraudEngine.Core.Rules
 {
@@ -15,11 +16,12 @@ namespace FraudEngine.Core.Rules
 
         public string Name => nameof(RapidTransactionsRule);
 
-        public RapidTransactionsRule(IRepository repo, int countThreshold = 5, TimeSpan? window = null)
+        public RapidTransactionsRule(IRepository repo, IOptions<RuleOptions> options)
         {
             _repo = repo ?? throw new ArgumentNullException(nameof(repo));
-            _countThreshold = countThreshold;
-            _window = window ?? TimeSpan.FromMinutes(1);
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            _countThreshold = options.Value.RapidTransactionCount;
+            _window = options.Value.RapidTransactionWindow;
         }
 
         public async Task<FraudAlert[]> EvaluateAsync(TransactionEvent tx)

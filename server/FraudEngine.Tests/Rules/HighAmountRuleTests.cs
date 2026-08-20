@@ -1,16 +1,22 @@
 using System.Threading.Tasks;
 using FraudEngine.Core.Models;
 using FraudEngine.Core.Rules;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace FraudEngine.Tests.Rules
 {
     public class HighAmountRuleTests
     {
+        private static HighAmountRule CreateRule(decimal threshold = 10000m)
+        {
+            return new HighAmountRule(Options.Create(new RuleOptions { HighAmountThreshold = threshold }));
+        }
+
         [Fact]
         public async Task EvaluateAsync_AmountAboveThreshold_ProducesHighSeverityAlert()
         {
-            var rule = new HighAmountRule(threshold: 10000m);
+            var rule = CreateRule(threshold: 10000m);
             var tx = new TransactionEvent { AccountId = "acct-1", Amount = 15000m, Metadata = string.Empty };
 
             var alerts = await rule.EvaluateAsync(tx);
@@ -24,7 +30,7 @@ namespace FraudEngine.Tests.Rules
         [Fact]
         public async Task EvaluateAsync_AmountEqualsThreshold_ProducesAlert()
         {
-            var rule = new HighAmountRule(threshold: 10000m);
+            var rule = CreateRule(threshold: 10000m);
             var tx = new TransactionEvent { AccountId = "acct-1", Amount = 10000m, Metadata = string.Empty };
 
             var alerts = await rule.EvaluateAsync(tx);
@@ -35,7 +41,7 @@ namespace FraudEngine.Tests.Rules
         [Fact]
         public async Task EvaluateAsync_AmountBelowThreshold_ProducesNoAlert()
         {
-            var rule = new HighAmountRule(threshold: 10000m);
+            var rule = CreateRule(threshold: 10000m);
             var tx = new TransactionEvent { AccountId = "acct-1", Amount = 500m, Metadata = string.Empty };
 
             var alerts = await rule.EvaluateAsync(tx);

@@ -31,9 +31,18 @@ builder.Services.AddDbContext<FraudDbContext>(options =>
 // Repository
 builder.Services.AddScoped<IRepository, EfRepository>();
 
-// Rules registration (production: consider configuration-driven rules)
-builder.Services.AddSingleton<IFraudRule>(sp => new HighAmountRule(10000m));
-builder.Services.AddScoped<IFraudRule>(sp => new RapidTransactionsRule(sp.GetRequiredService<IRepository>(), 5, TimeSpan.FromMinutes(1)));
+// Rule thresholds are configuration-driven - see the "RuleOptions" section of
+// appsettings.json / appsettings.{Environment}.json.
+builder.Services.Configure<RuleOptions>(builder.Configuration.GetSection("RuleOptions"));
+
+// Rules registration
+builder.Services.AddSingleton<IFraudRule, HighAmountRule>();
+builder.Services.AddScoped<IFraudRule, RapidTransactionsRule>();
+builder.Services.AddScoped<IFraudRule, VelocityAmountRule>();
+builder.Services.AddScoped<IFraudRule, UnusualCountryRule>();
+builder.Services.AddScoped<IFraudRule, NightTimeWithdrawalRule>();
+builder.Services.AddScoped<IFraudRule, MerchantCategoryRule>();
+builder.Services.AddScoped<IFraudRule, AccountAgeRule>();
 builder.Services.AddScoped<RulesEngine>();
 
 var app = builder.Build();

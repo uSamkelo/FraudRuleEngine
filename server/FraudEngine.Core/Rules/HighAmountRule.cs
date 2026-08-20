@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using FraudEngine.Core.Models;
-using FraudEngine.Core.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace FraudEngine.Core.Rules
 {
@@ -10,9 +10,10 @@ namespace FraudEngine.Core.Rules
         private readonly decimal _threshold;
         public string Name => nameof(HighAmountRule);
 
-        public HighAmountRule(decimal threshold = 10000m)
+        public HighAmountRule(IOptions<RuleOptions> options)
         {
-            _threshold = threshold;
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            _threshold = options.Value.HighAmountThreshold;
         }
 
         public Task<FraudAlert[]> EvaluateAsync(TransactionEvent tx)
