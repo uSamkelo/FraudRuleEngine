@@ -88,6 +88,7 @@ docker compose up --build
 - API: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/swagger`
 - Health check: `http://localhost:8080/health`
+- pgAdmin: `http://localhost:5050` (admin@example.com / admin)
 
 On first run (in the `Development` environment, which `docker-compose.yml` sets for the `api` service), the database is seeded automatically with 27 accounts and 200+ transactions — including one guaranteed, real scenario per fraud rule — so `GET /api/transactions/alerts` returns results immediately with no manual setup. Seeding is a no-op once the database has data, and never runs outside `Development`.
 
