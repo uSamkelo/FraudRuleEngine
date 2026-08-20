@@ -43,7 +43,17 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 // Add services
-builder.Services.AddControllers();
+
+// Enums (TransactionCategory, Channel, AlertSeverity, AlertStatus, AccountType,
+// RiskTier, ...) are serialized as their string names rather than raw integers
+// in both API responses and the Swagger schema. allowIntegerValues stays true
+// (the default), so numeric enum values sent by older/backward-compatible
+// clients still deserialize correctly on the way in.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
