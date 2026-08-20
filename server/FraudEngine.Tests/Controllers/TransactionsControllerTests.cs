@@ -135,6 +135,27 @@ namespace FraudEngine.Tests.Controllers
             Assert.Single(paged.Items);
         }
 
+        [Theory]
+        [InlineData(-1, 20, 1, 20)]
+        [InlineData(0, 20, 1, 20)]
+        [InlineData(1, -1, 1, 1)]
+        [InlineData(1, 0, 1, 1)]
+        [InlineData(1, 5000, 1, 100)]
+        public async Task GetAll_OutOfRangePageOrPageSize_ClampsInsteadOfErroring(
+            int page, int pageSize, int expectedPage, int expectedPageSize)
+        {
+            var repo = new InMemoryRepository();
+            var controller = CreateController(repo);
+            await controller.Post(ValidRequest());
+
+            var result = await controller.GetAll(null, null, null, null, page, pageSize);
+
+            var ok = Assert.IsType<OkObjectResult>(result);
+            var paged = Assert.IsType<PagedResult<TransactionResponse>>(ok.Value);
+            Assert.Equal(expectedPage, paged.Page);
+            Assert.Equal(expectedPageSize, paged.PageSize);
+        }
+
         [Fact]
         public async Task GetAlerts_FiltersByStatus()
         {

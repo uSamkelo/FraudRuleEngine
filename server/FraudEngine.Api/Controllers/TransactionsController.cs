@@ -14,6 +14,18 @@ namespace FraudEngine.Api.Controllers
     [Route("api/[controller]")]
     public class TransactionsController : ControllerBase
     {
+        // Sane bounds for the page/pageSize query params used by GetAll below -
+        // clamped rather than validated, so an out-of-range value (e.g.
+        // ?pageSize=-1 or an overflow-prone ?page=99999999999) just gets coerced
+        // into range instead of surfacing as a 500 from the database (negative
+        // LIMIT, OFFSET overflow, etc.). MaxPage is set far higher than any real
+        // result set could page through, purely so (page - 1) * pageSize can
+        // never overflow int math downstream.
+        private const int MinPage = 1;
+        private const int MaxPage = 1_000_000;
+        private const int MinPageSize = 1;
+        private const int MaxPageSize = 100;
+
         private readonly IRepository _repo;
         private readonly RulesEngine _engine;
 
@@ -85,6 +97,9 @@ namespace FraudEngine.Api.Controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
+            page = Math.Clamp(page, MinPage, MaxPage);
+            pageSize = Math.Clamp(pageSize, MinPageSize, MaxPageSize);
+
             var (items, totalCount) = await _repo.GetTransactionsAsync(accountId, category, from, to, page, pageSize);
 
             var result = new PagedResult<TransactionResponse>
