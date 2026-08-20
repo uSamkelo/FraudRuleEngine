@@ -11,6 +11,7 @@ namespace FraudEngine.Core.Data
 
         public DbSet<TransactionEvent> Transactions { get; set; }
         public DbSet<FraudAlert> Alerts { get; set; }
+        public DbSet<Account> Accounts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -20,6 +21,9 @@ namespace FraudEngine.Core.Data
             {
                 b.HasKey(t => t.Id);
                 b.HasIndex(t => t.AccountId);
+                b.HasIndex(t => t.MerchantId);
+                b.HasIndex(t => t.Channel);
+                b.HasIndex(t => t.CountryCode);
                 b.Property(t => t.Amount).HasPrecision(18, 2);
             });
 
@@ -27,6 +31,12 @@ namespace FraudEngine.Core.Data
             {
                 b.HasKey(a => a.Id);
                 b.HasIndex(a => a.TransactionId);
+            });
+
+            modelBuilder.Entity<Account>(b =>
+            {
+                b.HasKey(a => a.AccountId);
+                b.HasIndex(a => a.AccountId);
             });
         }
     }

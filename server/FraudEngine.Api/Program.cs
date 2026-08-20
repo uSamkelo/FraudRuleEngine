@@ -1,9 +1,35 @@
+using System.Text.Json;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using FraudEngine.Api.Middleware;
+using FraudEngine.Api.Validators;
 using FraudEngine.Core.Data;
 using FraudEngine.Core.Repositories;
 using FraudEngine.Core.Rules;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Json;
+
+// Configured up-front, before the host is built, so that startup itself (host
+// building, configuration binding, DI container assembly) is also covered by
+// structured logging rather than only the request pipeline.
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console(new JsonFormatter())
+    .WriteTo.File("logs/fraud-engine-.log", rollingInterval: RollingInterval.Day)
+    .Enrich.FromLogContext()
+    .Enrich.WithMachineName()
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
+    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Route all framework/ASP.NET Core logging (ILogger<T>) through Serilog instead
+// of the default console/debug providers, so every log entry - ours and the
+// framework's - ends up in the same structured JSON sinks configured above.
+builder.Host.UseSerilog();
 
 // Connection string is sourced from configuration (appsettings.json / appsettings.{Environment}.json),
 // and can be overridden in any environment via the standard ASP.NET Core env var convention:
@@ -17,9 +43,25 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 // Add services
-builder.Services.AddControllers();
+
+// Enums (TransactionCategory, Channel, AlertSeverity, AlertStatus, AccountType,
+// RiskTier, ...) are serialized as their string names rather than raw integers
+// in both API responses and the Swagger schema. allowIntegerValues stays true
+// (the default), so numeric enum values sent by older/backward-compatible
+// clients still deserialize correctly on the way in.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// FluentValidation - validators run automatically as part of MVC model binding
+// (in addition to any DataAnnotations on the request DTOs), producing a standard
+// ValidationProblemDetails (400) response for invalid input.
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<TransactionRequestValidator>();
 
 // EF Core with Npgsql. EnableRetryOnFailure adds resilience against transient
 // connectivity issues (e.g. the database container still starting up, brief
@@ -31,9 +73,24 @@ builder.Services.AddDbContext<FraudDbContext>(options =>
 // Repository
 builder.Services.AddScoped<IRepository, EfRepository>();
 
-// Rules registration (production: consider configuration-driven rules)
-builder.Services.AddSingleton<IFraudRule>(sp => new HighAmountRule(10000m));
-builder.Services.AddScoped<IFraudRule>(sp => new RapidTransactionsRule(sp.GetRequiredService<IRepository>(), 5, TimeSpan.FromMinutes(1)));
+// Health checks - /health reports the app itself plus live Postgres connectivity,
+// so orchestrators (Docker/K8s) can distinguish "process is up" from "process is
+// up but can't reach its database".
+builder.Services.AddHealthChecks()
+    .AddNpgSql(connectionString, name: "postgres", failureStatus: HealthStatus.Unhealthy);
+
+// Rule thresholds are configuration-driven - see the "RuleOptions" section of
+// appsettings.json / appsettings.{Environment}.json.
+builder.Services.Configure<RuleOptions>(builder.Configuration.GetSection("RuleOptions"));
+
+// Rules registration
+builder.Services.AddSingleton<IFraudRule, HighAmountRule>();
+builder.Services.AddScoped<IFraudRule, RapidTransactionsRule>();
+builder.Services.AddScoped<IFraudRule, VelocityAmountRule>();
+builder.Services.AddScoped<IFraudRule, UnusualCountryRule>();
+builder.Services.AddScoped<IFraudRule, NightTimeWithdrawalRule>();
+builder.Services.AddScoped<IFraudRule, MerchantCategoryRule>();
+builder.Services.AddScoped<IFraudRule, AccountAgeRule>();
 builder.Services.AddScoped<RulesEngine>();
 
 var app = builder.Build();
@@ -63,6 +120,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure middleware
+
+// Registered first, ahead of everything else (including the exception handler),
+// so every request - even ones that end up hitting GlobalExceptionMiddleware -
+// gets a correlation id attached to its log entries and echoed back to the caller.
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -73,9 +136,43 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/", () => Results.Redirect("/swagger"));
 }
 
-// Lightweight liveness endpoint - useful for container/orchestrator health checks
-// in any environment (unlike Swagger, this is always available).
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+// Production-grade liveness/readiness endpoint - reports overall status plus
+// per-check detail (currently just Postgres connectivity) as JSON. Always
+// available (unlike Swagger), in any environment.
+//
+// Deliberately NOT using HealthChecks.UI.Client's UIResponseWriter here: by
+// default it includes each failed check's Description and exception message,
+// which for the "postgres" check can leak raw connection-string/error detail
+// (hostnames, "password authentication failed for user ...", etc.) to any
+// unauthenticated caller. That would undercut GlobalExceptionMiddleware's
+// deliberate choice to hide exception details outside Development. This
+// writer only ever emits name/status/duration per check, plus the top-level
+// status/totalDuration.
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration.ToString()
+            }),
+            totalDuration = report.TotalDuration.ToString()
+        };
+
+        await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+    }
+});
+
+// Registered before UseRouting so it wraps the entire pipeline downstream,
+// converting any unhandled exception into a standard problem+json response.
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseRouting();
 app.UseAuthorization();

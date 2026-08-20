@@ -22,6 +22,35 @@ namespace FraudEngine.Core.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("FraudEngine.Core.Models.Account", b =>
+                {
+                    b.Property<string>("AccountId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("AccountType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultCountryCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RiskTier")
+                        .HasColumnType("integer");
+
+                    b.HasKey("AccountId");
+
+                    b.HasIndex("AccountId");
+
+                    b.ToTable("Accounts");
+                });
+
             modelBuilder.Entity("FraudEngine.Core.Models.FraudAlert", b =>
                 {
                     b.Property<Guid>("Id")
@@ -32,7 +61,12 @@ namespace FraudEngine.Core.Data.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Reason")
-                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedBy")
                         .HasColumnType("text");
 
                     b.Property<string>("RuleName")
@@ -40,6 +74,9 @@ namespace FraudEngine.Core.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("Severity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("TransactionId")
@@ -66,11 +103,39 @@ namespace FraudEngine.Core.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CardLast4")
+                        .HasColumnType("text");
+
                     b.Property<int>("Category")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Metadata")
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CountryCode")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DeviceId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MerchantCategoryCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MerchantId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MerchantName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Metadata")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("ProcessedAt")
@@ -82,6 +147,12 @@ namespace FraudEngine.Core.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("Channel");
+
+                    b.HasIndex("CountryCode");
+
+                    b.HasIndex("MerchantId");
 
                     b.ToTable("Transactions");
                 });

@@ -6,9 +6,19 @@ namespace FraudEngine.Core.Models
 {
     public enum AlertSeverity
     {
-        Low = 0,
-        Medium = 1,
-        High = 2
+        Info = 0,
+        Low = 1,
+        Medium = 2,
+        High = 3,
+        Critical = 4
+    }
+
+    public enum AlertStatus
+    {
+        Open,
+        UnderReview,
+        Resolved,
+        FalsePositive
     }
 
     public class FraudAlert
@@ -20,12 +30,18 @@ namespace FraudEngine.Core.Models
         public Guid TransactionId { get; set; }
 
         [Required]
-        public string RuleName { get; set; }
+        public required string RuleName { get; set; }
 
-        public string Reason { get; set; }
+        public string? Reason { get; set; }
 
         public AlertSeverity Severity { get; set; } = AlertSeverity.Low;
 
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+        public AlertStatus Status { get; set; } = AlertStatus.Open;
+
+        public DateTimeOffset? ReviewedAt { get; set; }
+
+        public string? ReviewedBy { get; set; }
     }
 }
