@@ -4,7 +4,7 @@ namespace FraudEngine.Api.Dtos
 {
     /// <summary>
     /// Maps EF entities to their public-facing DTO shapes so controllers never
-    /// return <see cref="TransactionEvent"/>/<see cref="FraudAlert"/> directly.
+    /// return <see cref="TransactionEvent"/>/<see cref="FraudAlert"/>/<see cref="Account"/> directly.
     /// </summary>
     public static class MappingExtensions
     {
@@ -39,6 +39,16 @@ namespace FraudEngine.Api.Dtos
             Status = alert.Status,
             ReviewedAt = alert.ReviewedAt,
             ReviewedBy = alert.ReviewedBy
+        };
+
+        public static AccountResponse ToResponse(this Account account) => new()
+        {
+            AccountId = account.AccountId,
+            AccountType = account.AccountType,
+            RiskTier = account.RiskTier,
+            CreatedAt = account.CreatedAt,
+            OwnerId = account.OwnerId,
+            DefaultCountryCode = account.DefaultCountryCode
         };
     }
 }

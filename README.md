@@ -132,6 +132,8 @@ All request/response enums (`Category`, `Channel`, `Status`, `Severity`, ...) se
 | `GET` | `/api/transactions?accountId=&category=&from=&to=&page=&pageSize=` | Paginated, filterable transaction listing. All filters optional; `page`/`pageSize` are clamped to sane bounds (`pageSize` max 100). |
 | `GET` | `/api/transactions/alerts?status=` | List fraud alerts, optionally filtered by status (`Open`/`UnderReview`/`Resolved`/`FalsePositive`). |
 | `PATCH` | `/api/alerts/{id}/status` | Update an alert's review status (`{ "status": "Resolved", "reviewedBy": "analyst-1" }`). `404` if the alert doesn't exist. |
+| `POST` | `/api/accounts` | Create an account (used by `UnusualCountryRule`, `NightTimeWithdrawalRule`, `AccountAgeRule`). `409` if the `accountId` already exists. |
+| `GET` | `/api/accounts/{id}` | Fetch a single account by id. `404` if not found. |
 | `GET` | `/health` | Liveness/readiness — overall status plus Postgres connectivity. |
 
 Example:
@@ -175,12 +177,12 @@ cd server
 dotnet test
 ```
 
-80 xUnit tests, no database required (an in-memory `IRepository` test double stands in for EF Core):
+100 xUnit tests, no database required (an in-memory `IRepository` test double stands in for EF Core):
 
 - **Rules** — all 7 fraud rules: triggers, non-triggers, and boundary conditions.
-- **Controllers** — `TransactionsController`, `AlertsController`: status codes, pagination clamping, not-found handling.
+- **Controllers** — `TransactionsController`, `AlertsController`, `AccountsController`: status codes, pagination clamping, not-found/conflict handling.
 - **Middleware** — `GlobalExceptionMiddleware` (problem+json shape, already-started-response guard), `RulesEngine` (per-rule failure isolation).
-- **Validators** — `TransactionRequestValidator`, `UpdateAlertStatusRequestValidator`.
+- **Validators** — `TransactionRequestValidator`, `UpdateAlertStatusRequestValidator`, `AccountRequestValidator` (including an end-to-end test that the validator is actually wired into the request pipeline).
 - **Serialization** — enum-as-string JSON round-tripping, including backward compatibility with numeric input.
 
 ## Observability
@@ -198,12 +200,12 @@ dotnet test
 - Structured logging + correlation IDs + health checks (above)
 - Nullable reference types enabled project-wide, 0 build warnings
 - Automatic schema migrations, connection retry-on-failure
-- 80 automated tests covering rules, controllers, middleware, and validators
+- 100 automated tests covering rules, controllers, middleware, and validators
 - Docker Compose with `restart: unless-stopped` and a Postgres healthcheck gating API startup
 
 **Deliberately out of scope** (per the project's own scoping — not oversights, but worth knowing before calling this "done"):
 - **Authentication / authorization** — no JWT/OAuth2; every endpoint is open. Required before any real deployment.
-- **Account management API** — `Account` records (used by `UnusualCountryRule`, `NightTimeWithdrawalRule`, `AccountAgeRule`) are currently only created by the `Development`-only seeder. Without an `AccountsController` or equivalent write path, those 3 of the 7 rules have no accounts to evaluate against outside of seeded dev data — they'll never fire in a real deployment until account data exists.
+- **Full account CRUD** — `AccountsController` covers create (`POST /api/accounts`) and lookup-by-id (`GET /api/accounts/{id}`) only, which is what's needed so `UnusualCountryRule`, `NightTimeWithdrawalRule`, and `AccountAgeRule` have real accounts to evaluate against outside of seeded dev data. Update, delete, and list-all endpoints are deliberately not implemented — not needed to close that gap, and would be scope creep.
 - **Rate limiting** — not implemented; intended to be handled at the infrastructure layer (API gateway / reverse proxy) if deployed for real.
 - **Multi-tenancy, rule DSL/admin UI, event sourcing or message queues** — the synchronous request/response model and code-based rule registration are sufficient for this scope; these were explicitly not pursued.
 - **CI/CD pipeline** — none configured in this repository; `dotnet build`/`dotnet test` are the manual gate today.
@@ -220,7 +222,7 @@ server/
 │   ├── Repositories/          IRepository, EfRepository
 │   └── Rules/                 IFraudRule, RulesEngine, RuleOptions, the 7 rule implementations
 ├── FraudEngine.Api/
-│   ├── Controllers/           TransactionsController, AlertsController
+│   ├── Controllers/           TransactionsController, AlertsController, AccountsController
 │   ├── Dtos/                  Request/response DTOs + mapping extensions
 │   ├── Validators/             FluentValidation validators
 │   ├── Middleware/             GlobalExceptionMiddleware, CorrelationIdMiddleware
