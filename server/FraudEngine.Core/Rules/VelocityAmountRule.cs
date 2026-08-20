@@ -28,11 +28,11 @@ namespace FraudEngine.Core.Rules
 
         public async Task<FraudAlert[]> EvaluateAsync(TransactionEvent tx)
         {
+            // Every real caller (TransactionsController, DbSeeder) persists the current
+            // transaction before evaluating rules against it, so it is already included
+            // in the query result below - do not add tx.Amount again here.
             var recent = await _repo.GetRecentTransactionsByAccountAsync(tx.AccountId, _window);
-
-            // The current transaction hasn't been persisted yet, so it isn't included
-            // in the query result - add it explicitly.
-            var total = (recent?.Sum(t => t.Amount) ?? 0m) + tx.Amount;
+            var total = recent?.Sum(t => t.Amount) ?? 0m;
 
             if (total >= _threshold)
             {

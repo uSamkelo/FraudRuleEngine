@@ -30,8 +30,11 @@ namespace FraudEngine.Tests.Rules
             await repo.AddTransactionAsync(new TransactionEvent { AccountId = "acct-1", Amount = 20000m, Metadata = string.Empty });
             await repo.AddTransactionAsync(new TransactionEvent { AccountId = "acct-1", Amount = 20000m, Metadata = string.Empty });
 
-            // In-flight transaction, not yet persisted: 20000 + 20000 + 15000 = 55000 >= 50000
+            // Mirrors the real pipeline (TransactionsController / DbSeeder): the
+            // transaction under test is persisted before the rule evaluates it.
+            // 20000 + 20000 + 15000 = 55000 >= 50000
             var tx = new TransactionEvent { AccountId = "acct-1", Amount = 15000m, Metadata = string.Empty };
+            await repo.AddTransactionAsync(tx);
 
             var alerts = await rule.EvaluateAsync(tx);
 
@@ -50,6 +53,7 @@ namespace FraudEngine.Tests.Rules
             await repo.AddTransactionAsync(new TransactionEvent { AccountId = "acct-1", Amount = 1000m, Metadata = string.Empty });
 
             var tx = new TransactionEvent { AccountId = "acct-1", Amount = 500m, Metadata = string.Empty };
+            await repo.AddTransactionAsync(tx);
 
             var alerts = await rule.EvaluateAsync(tx);
 
@@ -57,18 +61,21 @@ namespace FraudEngine.Tests.Rules
         }
 
         [Fact]
-        public async Task EvaluateAsync_DoesNotDoubleCountTheInFlightTransaction()
+        public async Task EvaluateAsync_DoesNotDoubleCountTheCurrentTransaction()
         {
             var repo = new InMemoryRepository();
-            // Correct total is 300 + 200 = 500, which is below this threshold. A rule
-            // that mistakenly summed the in-flight transaction's amount twice would
-            // compute 700 and incorrectly fire.
+            // Under the real pipeline order, the transaction under test is persisted
+            // before EvaluateAsync runs, so GetRecentTransactionsByAccountAsync already
+            // includes it. Correct total is 100 + 200 + 200 = 500, which is below this
+            // threshold. A rule that mistakenly added tx.Amount a second time on top of
+            // the (already-inclusive) query result would compute 700 and incorrectly fire.
             var rule = CreateRule(repo, threshold: 700m);
 
             await repo.AddTransactionAsync(new TransactionEvent { AccountId = "acct-1", Amount = 100m, Metadata = string.Empty });
             await repo.AddTransactionAsync(new TransactionEvent { AccountId = "acct-1", Amount = 200m, Metadata = string.Empty });
 
             var tx = new TransactionEvent { AccountId = "acct-1", Amount = 200m, Metadata = string.Empty };
+            await repo.AddTransactionAsync(tx);
 
             var alerts = await rule.EvaluateAsync(tx);
 
