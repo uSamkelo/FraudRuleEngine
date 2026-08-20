@@ -70,6 +70,21 @@ namespace FraudEngine.Tests.Validators
         }
 
         [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public void Validate_NullOrEmptyCurrency_HasError(string? currency)
+        {
+            var request = ValidRequest();
+            request.Currency = currency!;
+
+            var result = _validator.Validate(request);
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Errors, e => e.PropertyName == nameof(TransactionRequest.Currency));
+        }
+
+        [Theory]
         [InlineData("z")]
         [InlineData("ZAF")]
         [InlineData("za")]
@@ -77,6 +92,21 @@ namespace FraudEngine.Tests.Validators
         {
             var request = ValidRequest();
             request.CountryCode = countryCode;
+
+            var result = _validator.Validate(request);
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Errors, e => e.PropertyName == nameof(TransactionRequest.CountryCode));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public void Validate_NullOrEmptyCountryCode_HasError(string? countryCode)
+        {
+            var request = ValidRequest();
+            request.CountryCode = countryCode!;
 
             var result = _validator.Validate(request);
 

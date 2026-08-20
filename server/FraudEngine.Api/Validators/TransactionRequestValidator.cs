@@ -18,10 +18,12 @@ namespace FraudEngine.Api.Validators
                 .GreaterThan(0);
 
             RuleFor(x => x.Currency)
+                .NotEmpty()
                 .Matches("^[A-Z]{3}$")
                 .WithMessage("Currency must be a 3-letter ISO 4217 code (e.g. 'ZAR').");
 
             RuleFor(x => x.CountryCode)
+                .NotEmpty()
                 .Matches("^[A-Z]{2}$")
                 .WithMessage("CountryCode must be a 2-letter ISO 3166-1 alpha-2 code (e.g. 'ZA').");
 
